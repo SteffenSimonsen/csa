@@ -1,3 +1,7 @@
+# vscode settings
+.vscode/
+
+
 # Python-generated files
 __pycache__/
 *.py[oc]
@@ -11,4 +15,14 @@ wheels/
 
 #processed data
 data/processed/*
+.parquet
 
+#logs
+logs/
+logs/*
+tensorboard/
+
+# Model checkpoints
+checkpoints/
+checkpoints/*
+*.ckpt
