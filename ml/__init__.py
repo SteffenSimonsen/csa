@@ -1,10 +1,6 @@
-# ml/src/__init__.py
-
+# ml/__init__.py
 from .models import SentimentModel, SentimentLightningModule
 from .training import SentimentDataModule
+from .inference import SentimentPredictor
 
-__all__ = [
-    'SentimentModel',
-    'SentimentLightningModule', 
-    'SentimentDataModule'
-]
+__all__ = ['SentimentModel', 'SentimentLightningModule', 'SentimentDataModule', 'SentimentPredictor']
