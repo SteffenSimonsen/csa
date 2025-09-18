@@ -6,16 +6,19 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "datasets>=4.1.0",
+    "fastapi>=0.116.2",
     "jupyter>=1.1.1",
     "matplotlib>=3.10.6",
     "numpy>=2.3.3",
     "pandas>=2.3.2",
+    "pydantic>=2.11.9",
     "pytorch-lightning>=2.5.5",
     "scikit-learn>=1.7.2",
     "tensorboard>=2.20.0",
     "torch>=2.8.0",
     "torchmetrics>=1.8.2",
     "transformers>=4.56.1",
+    "uvicorn>=0.35.0",
 ]
 
 [dependency-groups]
