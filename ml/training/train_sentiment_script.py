@@ -11,13 +11,15 @@ from models import SentimentLightningModule
 from training import SentimentDataModule
 import torch
 
+torch.set_float32_matmul_precision('high')
+
 def train_sentiment_model():
     # Set random seed for reproducibility
     pl.seed_everything(42)
     
     # Data module
     data_module = SentimentDataModule(
-        data_dir="../data/processed",
+        data_dir="data/processed",
         batch_size=16
     )
     

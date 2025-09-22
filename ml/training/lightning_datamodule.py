@@ -49,7 +49,9 @@ class SentimentDataModule(pl.LightningDataModule):
             dataset, 
             batch_size=self.batch_size, 
             shuffle=True,
-            collate_fn=self.collate_fn
+            collate_fn=self.collate_fn,
+            num_workers=4,  
+            persistent_workers=True
         )
         
     def val_dataloader(self):
@@ -58,7 +60,8 @@ class SentimentDataModule(pl.LightningDataModule):
             dataset,
             batch_size=self.batch_size,
             shuffle=False, 
-            collate_fn=self.collate_fn
+            collate_fn=self.collate_fn,
+            num_workers=4
         )
         
     def test_dataloader(self):
@@ -67,5 +70,6 @@ class SentimentDataModule(pl.LightningDataModule):
             dataset,
             batch_size=self.batch_size,
             shuffle=False,
-            collate_fn=self.collate_fn
+            collate_fn=self.collate_fn,
+            num_workers=4
         )

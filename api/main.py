@@ -24,8 +24,25 @@ app.add_middleware(
 
 # Initialize predictor with error handling
 try:
-    predictor = SentimentPredictor()
-    logger.info("Model loaded successfully")
+    # Try production model first, fallback to checkpoint
+    model_paths = [
+        "ml/models/production_sentiment_model.pth",
+        "checkpoints/final_sentiment_model.pth"
+    ]
+    
+    predictor = None
+    for model_path in model_paths:
+        try:
+            predictor = SentimentPredictor(model_path=model_path)
+            logger.info(f"Model loaded successfully from {model_path}")
+            break
+        except FileNotFoundError:
+            logger.warning(f"Model not found at {model_path}")
+            continue
+    
+    if predictor is None:
+        raise Exception("No trained model found")
+        
 except Exception as e:
     logger.error(f"Failed to load model: {str(e)}")
     predictor = None

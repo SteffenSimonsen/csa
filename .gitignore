@@ -16,6 +16,8 @@ wheels/
 #processed data
 data/processed/*
 .parquet
+data/processed
+data/raw
 
 #logs
 logs/
@@ -26,6 +28,7 @@ tensorboard/
 checkpoints/
 checkpoints/*
 *.ckpt
+*.pth
 
 #tests
 .pytest_cache/

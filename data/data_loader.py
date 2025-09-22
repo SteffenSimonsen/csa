@@ -6,13 +6,17 @@ from pathlib import Path
 from sklearn.model_selection import train_test_split
 from .data_preprocessing import clean_and_label_sample
 
-def load_streaming_dataset(split="train"):
-    """Load the Amazon reviews dataset in streaming mode
-    https://huggingface.co/datasets/gmongaras/Amazon-Reviews-2023
-    """
+def load_streaming_dataset(split="train", streaming=True):
+    """Load the Amazon reviews dataset in streaming or download mode https://huggingface.co/datasets/gmongaras/Amazon-Reviews-2023 """
     if split != "train":
         raise ValueError("Only 'train' split available. Use create_splits() for train/val/test splits.")
-    return load_dataset("gmongaras/Amazon-Reviews-2023", split=split, streaming=True)
+    
+    return load_dataset(
+        "gmongaras/Amazon-Reviews-2023", 
+        split=split, 
+        streaming=streaming
+    )
+
 
 def process_batch(dataset_iterator: Iterator, batch_size: int = 1000) -> List[Dict]:
     """Process a batch of samples from streaming dataset"""
