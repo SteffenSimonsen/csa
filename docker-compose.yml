@@ -1,0 +1,36 @@
+services:
+  sentiment-api:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - ENV=development
+      - LOG_LEVEL=info
+      - TRANSFORMERS_CACHE=/tmp/cache
+      - HF_HOME=/tmp/cache
+      - MPLCONFIGDIR=/tmp/cache
+    volumes:
+      # Mount checkpoints so we can update models without rebuilding
+      - ./checkpoints:/app/checkpoints:ro
+      - ./ml/models:/app/ml/models:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+
+  # Optional: Add a simple frontend for testing
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile.dashboard
+    ports:
+      - "8501:8501"
+    depends_on:
+      - sentiment-api
+    environment:
+      - API_URL=http://sentiment-api:8000

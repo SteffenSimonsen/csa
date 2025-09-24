@@ -1,0 +1,53 @@
+# Python cache and bytecode
+__pycache__/
+*.py[oc]
+*.pyo
+*.pyd
+.Python
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Large data files (we'll copy only essential model files)
+data/raw/
+data/processed/
+*.parquet
+
+# Logs and temporary files
+logs/
+*.log
+tensorboard/
+.pytest_cache/
+
+# Development files
+*.ipynb
+jupyter/
+notebooks/
+
+# Documentation
+README.md
+docs/
+
+# CI/CD files
+.github/
+deployment/
+
+# Test files (exclude from production)
+tests/

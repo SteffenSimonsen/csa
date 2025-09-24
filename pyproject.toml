@@ -11,6 +11,7 @@ dependencies = [
     "matplotlib>=3.10.6",
     "numpy>=2.3.3",
     "pandas>=2.3.2",
+    "plotly>=6.3.0",
     "pydantic>=2.11.9",
     "pytorch-lightning>=2.5.5",
     "requests>=2.32.5",

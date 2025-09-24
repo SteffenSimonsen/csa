@@ -16,7 +16,6 @@ def download_and_process_dataset(
     raw_dir="data/raw"
 ):
     Path(output_dir).mkdir(parents=True, exist_ok=True)
-    Path(raw_dir).mkdir(parents=True, exist_ok=True)
     
     print(f"Loading dataset in streaming mode...")
     
