@@ -3,6 +3,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from api.models import PredictionRequest, PredictionResponse
 from ml.inference.predictor import SentimentPredictor
 from data.data_preprocessing import SENTIMENT_MAPPING
+from db.operations import get_or_create_session, save_prediction, get_session_predictions
+from db.schemas import PredictionCreate
+from uuid import UUID
 import logging
 
 # Set up logging
@@ -57,31 +60,45 @@ def health():
         return {"status": "unhealthy", "error": "Model not loaded"}
     return {"status": "healthy", "model_loaded": True}
 
+
 @app.post("/predict", response_model=PredictionResponse)
 def predict_sentiment(request: PredictionRequest):
-    # Check if model is loaded
     if predictor is None:
-        raise HTTPException(
-            status_code=503, 
-            detail="Model not available. Service is unavailable."
-        )
-    
+        raise HTTPException(status_code=503, detail="Model not available")
     
     try:
-        # Make prediction
-        result = predictor.predict(request.text)
-        logger.info(f"Prediction made for text: {request.text[:50]}...")
-        return result
+        # 1. Handle session (create if needed, update if exists)
+        session = get_or_create_session(request.session_id)
+        
+        # 2. Make ML prediction
+        ml_result = predictor.predict(request.text)
+        
+        # 3. Save prediction to database
+        prediction_data = PredictionCreate(
+            session_id=session.session_id,
+            user_id=session.user_id,  # None for anonymous
+            text=request.text,
+            predicted_sentiment=ml_result['prediction']['label'],
+            confidence_score=ml_result['prediction']['confidence'],
+            prob_positive=ml_result['probabilities']['positive'],
+            prob_negative=ml_result['probabilities']['negative'],
+            prob_neutral=ml_result['probabilities']['neutral']
+        )
+        
+        saved_prediction = save_prediction(prediction_data)
+        
+        # 4. Return enhanced response
+        return PredictionResponse(
+            text=ml_result['text'],
+            prediction=ml_result['prediction'],
+            probabilities=ml_result['probabilities'],
+            session_id=session.session_id,
+            prediction_id=saved_prediction.prediction_id
+        )
         
     except Exception as e:
-        # Log the error
         logger.error(f"Prediction failed: {str(e)}")
-        
-        # Return user-friendly error
-        raise HTTPException(
-            status_code=500,
-            detail=f"Prediction failed: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Prediction failed: {str(e)}")
 
 @app.get("/model/info")
 def model_info():
@@ -97,3 +114,14 @@ def model_info():
         "device": str(predictor.device),
         "model_name": predictor.model.distilbert.config.name_or_path  
     }
+
+
+@app.get("/sessions/{session_id}/predictions")
+def get_session_predictions_endpoint(session_id: UUID):
+    """Get all predictions for a session"""
+    try:
+        predictions = get_session_predictions(session_id)
+        return {"predictions": predictions, "session_id": session_id}
+    except Exception as e:
+        logger.error(f"Failed to get predictions: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve predictions")

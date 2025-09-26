@@ -80,12 +80,18 @@ with tab1:
                 with st.spinner("Analyzing sentiment..."):
                     response = requests.post(
                         f"{API_URL}/predict",
-                        json={"text": review_text},
+                        json={
+                            "text": review_text,
+                            "session_id": st.session_state.get('current_session_id')
+                        },
                         timeout=10
                     )
-                
+
                 if response.status_code == 200:
                     result = response.json()
+
+                    if 'session_id' in result:
+                        st.session_state['current_session_id'] = result['session_id']
                     
                     # Add to history
                     history_item = {
@@ -175,68 +181,89 @@ with tab1:
 
 
 
+
 with tab2:
     st.header("📋 Analysis History")
     
-    if st.session_state.history:
-        # Summary stats at the top
-        sentiments = [item['result']['prediction']['label'] for item in st.session_state.history]
-        positive_count = sentiments.count('positive')
-        negative_count = sentiments.count('negative')
-        neutral_count = sentiments.count('neutral')
-        
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            st.metric("Total Reviews", len(st.session_state.history))
-        with col2:
-            st.metric("Positive", positive_count)
-        with col3:
-            st.metric("Neutral", neutral_count)
-        with col4:
-            st.metric("Negative", negative_count)
-        
-        # Clear history button
-        if st.button("🗑️ Clear History", type="secondary"):
-            st.session_state.history = []
-            st.rerun()
-        
-        st.divider()
-        
-        
-        for i, item in enumerate(st.session_state.history):
-            prediction = item['result']['prediction']
-            label = prediction['label']
-            confidence = prediction['confidence']
+    if 'current_session_id' in st.session_state:
+        try:
             
-            # Create colored card based on sentiment
-            if label == 'positive':
-                with st.container(border=True):
-                    st.success(f"✅ POSITIVE - Review #{len(st.session_state.history) - i}")
-                    st.markdown("**Review Text:**")
-                    st.write(f"*{item['text']}*")
-                    st.markdown("**Confidence:**")
-                    st.progress(confidence, text=f"{confidence:.1%}")
-                    st.write("")
+
+            # Fetch history from database 
+            history_response = requests.get(
+                f"{API_URL}/sessions/{st.session_state['current_session_id']}/predictions",
+                timeout=5
+            )
+            
+            if history_response.status_code == 200:
+                data = history_response.json()
+                predictions = data['predictions']
+                
+                if predictions:
+                    # Convert database format to match  existing display logic
+                    sentiments = [pred['predicted_sentiment'] for pred in predictions]
+                    positive_count = sentiments.count('positive')
+                    negative_count = sentiments.count('negative')
+                    neutral_count = sentiments.count('neutral')
                     
-            elif label == 'negative':
-                with st.container(border=True):
-                    st.error(f"❌ NEGATIVE - Review #{len(st.session_state.history) - i}")
-                    st.markdown("**Review Text:**")
-                    st.write(f"*{item['text']}*")
-                    st.markdown("**Confidence:**")
-                    st.progress(confidence, text=f"{confidence:.1%}")
-                    st.write("")
+                    # Summary stats 
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        st.metric("Total Reviews", len(predictions))
+                    with col2:
+                        st.metric("Positive", positive_count)
+                    with col3:
+                        st.metric("Neutral", neutral_count)
+                    with col4:
+                        st.metric("Negative", negative_count)
                     
-            else:  
-                with st.container(border=True):
-                    st.warning(f"⚠️ NEUTRAL - Review #{len(st.session_state.history) - i}")
-                    st.markdown("**Review Text:**")
-                    st.write(f"*{item['text']}*")
-                    st.markdown("**Confidence:**")
-                    st.progress(confidence, text=f"{confidence:.1%}")
-                    st.write("")
+                    st.write(f"Session: {data['session_id']}")
+                    st.divider()
+                    
+                    # Display predictions
+                    for i, pred in enumerate(predictions):
+                        label = pred['predicted_sentiment']
+                        confidence = pred['confidence_score']
+                        text = pred['text']
+                        
+                        # Create colored card
+                        if label == 'positive':
+                            with st.container(border=True):
+                                st.success(f"✅ POSITIVE - Review #{i+1}")
+                                st.markdown("**Review Text:**")
+                                st.write(f"*{text}*")
+                                st.markdown("**Confidence:**")
+                                st.progress(confidence, text=f"{confidence:.1%}")
+                                st.write(f"Created: {pred['created_at']}")
+                                st.write("")
+                        
+                        elif label == 'negative':
+                            with st.container(border=True):
+                                st.error(f"❌ NEGATIVE - Review #{i+1}")
+                                st.markdown("**Review Text:**")
+                                st.write(f"*{text}*")
+                                st.markdown("**Confidence:**")
+                                st.progress(confidence, text=f"{confidence:.1%}")
+                                st.write(f"Created: {pred['created_at']}")
+                                st.write("")
+                        
+                        else:  # neutral
+                            with st.container(border=True):
+                                st.warning(f"⚠️ NEUTRAL - Review #{i+1}")
+                                st.markdown("**Review Text:**")
+                                st.write(f"*{text}*")
+                                st.markdown("**Confidence:**")
+                                st.progress(confidence, text=f"{confidence:.1%}")
+                                st.write(f"Created: {pred['created_at']}")
+                                st.write("")
+                else:
+                    st.info("No predictions yet. Make a prediction first!")
+            else:
+                st.error("Could not load history from database")
+        except Exception as e:
+            st.error(f"Error loading history: {e}")
     else:
-        st.info("No reviews analyzed yet. Go to the Analyze tab to get started!")
+        st.info("Make a prediction first to start your session")
 
 with tab3:
     st.header("📊 Analytics Dashboard")
