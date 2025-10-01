@@ -1,7 +1,12 @@
 import torch
 from pathlib import Path
 from ..models.sentiment_model import SentimentModel
-from data.data_preprocessing import SENTIMENT_MAPPING
+
+SENTIMENT_MAPPING = {
+    0: 'negative',
+    1: 'neutral', 
+    2: 'positive'
+}
 
 
 class SentimentPredictor:

@@ -6,24 +6,46 @@ from sqlalchemy.exc import  IntegrityError
 from typing import Optional
 from uuid import UUID
 from datetime import datetime
+import bcrypt
+
+def hash_password(password: str) -> str:
+    """
+    Hash a plain text password using bcrypt
+    """
+    password_bytes = password.encode('utf-8')
+    salt = bcrypt.gensalt()
+    hashed = bcrypt.hashpw(password_bytes, salt)
+    return hashed.decode('utf-8')
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """
+    Verify a plain text password against a hashed password
+    """
+    password_bytes = plain_password.encode('utf-8')
+    hashed_bytes = hashed_password.encode('utf-8')
+    return bcrypt.checkpw(password_bytes, hashed_bytes)
 
 def create_user(user_data: UserCreate) -> UserResponse:
     """
-    Creates a new user in the database with proper validation
+    Creates a new user in the database with proper validation and password hashing
     """
     db = next(get_db())
     try:
+        # Hash the password before storing
+        hashed_password = hash_password(user_data.password)
+
         db_user = User(
             email=user_data.email,
-            username=user_data.username
+            username=user_data.username,
+            password_hash=hashed_password
         )
-        
+
         db.add(db_user)
         db.commit()
         db.refresh(db_user)
-        
+
         return UserResponse.model_validate(db_user)
-    
+
     except IntegrityError as e:
         db.rollback()
         # Check if it's a duplicate email or username
@@ -33,7 +55,7 @@ def create_user(user_data: UserCreate) -> UserResponse:
             raise ValueError(f"Username {user_data.username} already exists")
         else:
             raise ValueError("User creation failed due to constraint violation")
-    
+
     except Exception as e:
         db.rollback()
         raise e
@@ -230,5 +252,75 @@ def get_user_predictions(user_id: UUID) -> list[PredictionResponse]:
     try:
         predictions = db.query(Prediction).filter(Prediction.user_id == user_id).order_by(Prediction.created_at.desc()).all()
         return [PredictionResponse.model_validate(pred) for pred in predictions]
+    finally:
+        db.close()
+
+def authenticate_user(username: str, password: str) -> Optional[User]:
+    """
+    Authenticate a user by username/email and password
+    Returns the User object if authentication succeeds, None otherwise
+    """
+    db = next(get_db())
+    try:
+        # Try to find user by username or email
+        db_user = db.query(User).filter(
+            (User.username == username.lower()) | (User.email == username.lower())
+        ).first()
+
+        if not db_user:
+            return None
+
+        # Verify password
+        if not verify_password(password, db_user.password_hash):
+            return None
+
+        # Update last_active timestamp
+        db_user.last_active = datetime.utcnow()
+        db.commit()
+
+        return db_user
+    finally:
+        db.close()
+
+def convert_anonymous_session_to_user(session_id: UUID, user_id: UUID) -> SessionResponse:
+    """
+    Convert an anonymous session to a user session
+    Also updates all predictions from that session to link to the user
+    """
+    db = next(get_db())
+    try:
+        # Get the session
+        db_session = db.query(SessionModel).filter(SessionModel.session_id == session_id).first()
+
+        if not db_session:
+            raise ValueError("Session not found")
+
+        # Update session to link to user
+        db_session.user_id = user_id
+        db_session.is_anonymous = False
+        db_session.last_active = datetime.utcnow()
+
+        # Update all predictions from this session to link to user
+        db.query(Prediction).filter(Prediction.session_id == session_id).update({
+            "user_id": user_id
+        })
+
+        db.commit()
+        db.refresh(db_session)
+
+        return SessionResponse.model_validate(db_session)
+
+    except Exception as e:
+        db.rollback()
+        raise e
+    finally:
+        db.close()
+
+# Get all sessions for a user
+def get_user_sessions(user_id: UUID) -> list[SessionResponse]:
+    db = next(get_db())
+    try:
+        sessions = db.query(SessionModel).filter(SessionModel.user_id == user_id).order_by(SessionModel.created_at.desc()).all()
+        return [SessionResponse.model_validate(sess) for sess in sessions]
     finally:
         db.close()

@@ -17,7 +17,11 @@ st.set_page_config(
 )
 
 
-# Sidebar for API status
+# Initialize session state for user authentication
+if 'user' not in st.session_state:
+    st.session_state.user = None
+
+# Sidebar for API status and login
 with st.sidebar:
     st.header("🔧 System Status")
     
@@ -49,6 +53,107 @@ with st.sidebar:
     # Refresh button
     if st.button("🔄 Check Status"):
         st.rerun()
+
+    st.divider()
+
+    # User Authentication Section
+    st.header("👤 User Account")
+
+    if st.session_state.user is None:
+        # User not logged in - show login/register
+        auth_tab1, auth_tab2 = st.tabs(["Login", "Register"])
+
+        with auth_tab1:
+            st.subheader("Login")
+            login_username = st.text_input("Username or Email", key="login_username")
+            login_password = st.text_input("Password", type="password", key="login_password")
+
+            if st.button("Login", type="primary"):
+                if login_username and login_password:
+                    try:
+                        # Send login request with current session to convert it
+                        params = {}
+                        if 'current_session_id' in st.session_state:
+                            params['anonymous_session_id'] = str(st.session_state['current_session_id'])
+
+                        response = requests.post(
+                            f"{API_URL}/login",
+                            json={
+                                "username": login_username,
+                                "password": login_password
+                            },
+                            params=params,
+                            timeout=5
+                        )
+
+                        if response.status_code == 200:
+                            data = response.json()
+                            st.session_state.user = data['user']
+                            st.session_state.current_session_id = data['session_id']
+                            st.success(f"Welcome back, {data['user']['username']}!")
+                            st.rerun()
+                        else:
+                            st.error(f"Login failed: {response.json().get('detail', 'Unknown error')}")
+                    except Exception as e:
+                        st.error(f"Login error: {str(e)}")
+                else:
+                    st.warning("Please enter username and password")
+
+        with auth_tab2:
+            st.subheader("Register")
+            reg_email = st.text_input("Email", key="reg_email")
+            reg_username = st.text_input("Username", key="reg_username")
+            reg_password = st.text_input("Password", type="password", key="reg_password")
+            reg_password_confirm = st.text_input("Confirm Password", type="password", key="reg_password_confirm")
+
+            st.caption("Password must be at least 8 characters with uppercase, lowercase, and a digit")
+
+            if st.button("Register", type="primary"):
+                if reg_email and reg_username and reg_password and reg_password_confirm:
+                    if reg_password != reg_password_confirm:
+                        st.error("Passwords don't match!")
+                    else:
+                        try:
+                            response = requests.post(
+                                f"{API_URL}/register",
+                                json={
+                                    "email": reg_email,
+                                    "username": reg_username,
+                                    "password": reg_password
+                                },
+                                timeout=5
+                            )
+
+                            if response.status_code == 200:
+                                st.success("Registration successful! Please login.")
+                            else:
+                                st.error(f"Registration failed: {response.json().get('detail', 'Unknown error')}")
+                        except Exception as e:
+                            st.error(f"Registration error: {str(e)}")
+                else:
+                    st.warning("Please fill in all fields")
+
+        st.info("💡 You can use the app anonymously without logging in!")
+
+    else:
+        # User is logged in - show user info
+        st.success(f"Logged in as: **{st.session_state.user['username']}**")
+        st.write(f"Email: {st.session_state.user['email']}")
+
+        if st.button("Logout"):
+            try:
+                requests.post(
+                    f"{API_URL}/logout",
+                    json={"session_id": str(st.session_state.current_session_id)},
+                    timeout=5
+                )
+            except:
+                pass  # Logout fails gracefully
+
+            st.session_state.user = None
+            st.session_state.current_session_id = None
+            st.success("Logged out successfully!")
+            st.rerun()
     
     
 # Title
@@ -184,6 +289,23 @@ with tab1:
 
 with tab2:
     st.header("📋 Analysis History")
+
+    # Load current session_id into session state if logged in
+    if 'current_session_id' not in st.session_state:
+        try:
+            response = requests.get(
+                f"{API_URL}/users/{st.session_state.user['user_id']}/sessions",
+                timeout=5
+            )
+            if response.status_code == 200:
+                data = response.json()
+                sessions = data.get('sessions', [])
+                if sessions:
+                    # Use the latest session
+                    st.session_state['current_session_id'] = sessions[0]['session_id']
+        except Exception as e:
+            st.error(f"Error loading user sessions: {e}")
+ 
     
     if 'current_session_id' in st.session_state:
         try:

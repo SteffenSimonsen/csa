@@ -2,17 +2,37 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from api.models import PredictionRequest, PredictionResponse
 from ml.inference.predictor import SentimentPredictor
-from data.data_preprocessing import SENTIMENT_MAPPING
-from db.operations import get_or_create_session, save_prediction, get_session_predictions
-from db.schemas import PredictionCreate
+from db.connection import create_tables  
+from db.operations import (
+    get_or_create_session, save_prediction, get_session_predictions,
+    create_user, authenticate_user, create_user_session, convert_anonymous_session_to_user,
+    get_user_sessions
+)
+from db.schemas import PredictionCreate, UserCreate, UserLogin, LoginResponse, UserResponse
 from uuid import UUID
 import logging
+
+SENTIMENT_MAPPING = {
+    0: 'negative',
+    1: 'neutral', 
+    2: 'positive'
+}
+
+
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Sentiment Analysis API")
+
+# Add this startup event
+@app.on_event("startup")
+async def startup_event():
+    """Create database tables on startup"""
+    logger.info("Creating database tables...")
+    create_tables()
+    logger.info("Database tables ready")
 
 # CORS Configuration
 app.add_middleware(
@@ -115,6 +135,16 @@ def model_info():
         "model_name": predictor.model.distilbert.config.name_or_path  
     }
 
+# get a users session ids and return the latest
+@app.get("/users/{user_id}/sessions")
+def get_user_sessions_by_id(user_id: UUID):
+    try:
+        sessions = get_user_sessions(user_id)
+        return {"sessions": sessions}
+    except Exception as e:
+        logger.error(f"Failed to get user sessions: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve user sessions")
+
 
 @app.get("/sessions/{session_id}/predictions")
 def get_session_predictions_endpoint(session_id: UUID):
@@ -125,3 +155,65 @@ def get_session_predictions_endpoint(session_id: UUID):
     except Exception as e:
         logger.error(f"Failed to get predictions: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to retrieve predictions")
+
+@app.post("/register", response_model=UserResponse)
+def register_user(user_data: UserCreate):
+    """Register a new user"""
+    try:
+        user = create_user(user_data)
+        logger.info(f"New user registered: {user.username}")
+        return user
+    except ValueError as e:
+        # Handle duplicate username/email
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Registration failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Registration failed")
+
+@app.post("/login", response_model=LoginResponse)
+def login_user(login_data: UserLogin, anonymous_session_id: UUID = None):
+    """
+    Login a user and create/convert session
+    If anonymous_session_id is provided, converts that session to a user session
+    """
+    try:
+        # Authenticate user
+        user = authenticate_user(login_data.username, login_data.password)
+
+        if not user:
+            raise HTTPException(status_code=401, detail="Invalid username or password")
+
+        # If there's an anonymous session, convert it
+        if anonymous_session_id:
+            try:
+                session = convert_anonymous_session_to_user(anonymous_session_id, user.user_id)
+                logger.info(f"User logged in and converted anonymous session: {user.username}")
+            except ValueError:
+                # Session not found or invalid, create new one
+                session = create_user_session(user.user_id)
+                logger.info(f"User logged in with new session: {user.username}")
+        else:
+            # Create a new user session
+            session = create_user_session(user.user_id)
+            logger.info(f"User logged in: {user.username}")
+
+        return LoginResponse(
+            user=UserResponse.model_validate(user),
+            session_id=session.session_id
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Login failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Login failed")
+
+@app.post("/logout")
+def logout_user(session_id: UUID):
+    """Logout a user (currently just acknowledges, session expires naturally)"""
+    try:
+        # In a production app, you might want to invalidate the session here
+        # For now, sessions expire naturally after 30 minutes of inactivity
+        return {"message": "Logged out successfully", "session_id": session_id}
+    except Exception as e:
+        logger.error(f"Logout failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Logout failed")

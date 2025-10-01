@@ -3,23 +3,19 @@ FROM python:3.12-slim
 # Install uv
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
 
-# Set working directory
 WORKDIR /app
 
 # Copy dependency files
 COPY pyproject.toml uv.lock* ./
 
-# Install only streamlit dependencies
-RUN uv sync --frozen --no-dev
+# Install ONLY dashboard dependencies
+RUN uv sync --frozen --no-dev --group dashboard
 
-# Make sure we use venv
 ENV PATH="/app/.venv/bin:$PATH"
 
-# Copy dashboard code
+# Copy only dashboard code
 COPY dashboard/ ./dashboard/
 
-# Expose Streamlit port
 EXPOSE 8501
 
-# Run Streamlit
 CMD ["streamlit", "run", "dashboard/app.py", "--server.address", "0.0.0.0"]

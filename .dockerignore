@@ -25,7 +25,12 @@ Thumbs.db
 .git/
 .gitignore
 
-# Large data files (we'll copy only essential model files)
+# Model checkpoints - download at runtime instead
+checkpoints/
+*.pth
+*.ckpt
+
+# Large data files
 data/raw/
 data/processed/
 *.parquet
@@ -49,5 +54,9 @@ docs/
 .github/
 deployment/
 
-# Test files (exclude from production)
+# Test files
 tests/
+
+# Database files
+*.db
+*.sqlite

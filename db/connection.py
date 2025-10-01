@@ -17,7 +17,7 @@ print(f"Connecting to database: {safe_url}")
 # Create the database engine
 engine = create_engine(
     DATABASE_URL,
-    echo=True,  # Shows SQL queries in logs (useful for development)
+    echo=True,  # Shows SQL queries in logs 
     pool_size=10,  # Number of connections to keep open
     max_overflow=20  # Additional connections if needed
 )
@@ -25,7 +25,7 @@ engine = create_engine(
 # Create the database engine
 engine = create_engine(
     DATABASE_URL,
-    echo=True,  # Shows SQL queries in logs (useful for development)
+    echo=True,  # Shows SQL queries in logs 
     pool_size=10,  # Number of connections to keep open
     max_overflow=20  # Additional connections if needed
 )
@@ -33,7 +33,7 @@ engine = create_engine(
 # Create session factory
 SessionLocal = sessionmaker(
     bind=engine,
-    autocommit=False,  # Don't auto-commit changes (we control transactions)
+    autocommit=False,  # Don't auto-commit changes 
     autoflush=False,   # Don't auto-flush changes to DB
     expire_on_commit=False  # Keep objects usable after commit
 )
