@@ -5,7 +5,7 @@ from db.schemas import UserCreate, UserResponse, SessionResponse, PredictionCrea
 from sqlalchemy.exc import  IntegrityError
 from typing import Optional
 from uuid import UUID
-from datetime import datetime
+from datetime import datetime, timezone
 import bcrypt
 
 def hash_password(password: str) -> str:
@@ -166,7 +166,7 @@ def update_session_activity(session_id: UUID) -> Optional[SessionResponse]:
             return None
             
         # Update last_active timestamp
-        db_session.last_active = datetime.utcnow()
+        db_session.last_active = datetime.now(timezone.utc)
         db.commit()
         db.refresh(db_session)
         
@@ -220,7 +220,7 @@ def save_prediction(prediction_data: PredictionCreate) -> PredictionResponse:
         # Update session last_active timestamp
         session = db.query(SessionModel).filter(SessionModel.session_id == prediction_data.session_id).first()
         if session:
-            session.last_active = datetime.utcnow()
+            session.last_active = datetime.now(timezone.utc)
         
         db.commit()
         db.refresh(db_prediction)
@@ -275,7 +275,7 @@ def authenticate_user(username: str, password: str) -> Optional[User]:
             return None
 
         # Update last_active timestamp
-        db_user.last_active = datetime.utcnow()
+        db_user.last_active = datetime.now(timezone.utc)
         db.commit()
 
         return db_user
@@ -298,7 +298,7 @@ def convert_anonymous_session_to_user(session_id: UUID, user_id: UUID) -> Sessio
         # Update session to link to user
         db_session.user_id = user_id
         db_session.is_anonymous = False
-        db_session.last_active = datetime.utcnow()
+        db_session.last_active = datetime.now(timezone.utc)
 
         # Update all predictions from this session to link to user
         db.query(Prediction).filter(Prediction.session_id == session_id).update({

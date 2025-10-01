@@ -6,11 +6,12 @@ from db.connection import create_tables
 from db.operations import (
     get_or_create_session, save_prediction, get_session_predictions,
     create_user, authenticate_user, create_user_session, convert_anonymous_session_to_user,
-    get_user_sessions
+    get_user_predictions
 )
 from db.schemas import PredictionCreate, UserCreate, UserLogin, LoginResponse, UserResponse
 from uuid import UUID
 import logging
+import os
 
 SENTIMENT_MAPPING = {
     0: 'negative',
@@ -35,13 +36,22 @@ async def startup_event():
     logger.info("Database tables ready")
 
 # CORS Configuration
+# In development: allows all origins (*)
+# In production: set ALLOWED_ORIGINS env var (comma-separated URLs)
+# Example: ALLOWED_ORIGINS=https://yourdomain.com,https://app.yourdomain.com
+allowed_origins = os.getenv("ALLOWED_ORIGINS", "*")
+
+if allowed_origins == "*":
+    origins = ["*"]
+else:
+    origins = [origin.strip() for origin in allowed_origins.split(",")]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Development: allow all origins
-    # allow_origins=["https://your-frontend.com"],  # Production: specify exact domains
+    allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["*"],  # Allow all HTTP methods (GET, POST, etc.)
-    allow_headers=["*"],  # Allow all headers
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
@@ -52,7 +62,7 @@ try:
         "ml/models/production_sentiment_model.pth",
         "checkpoints/final_sentiment_model.pth"
     ]
-    
+
     predictor = None
     for model_path in model_paths:
         try:
@@ -62,12 +72,14 @@ try:
         except FileNotFoundError:
             logger.warning(f"Model not found at {model_path}")
             continue
-    
+
     if predictor is None:
-        raise Exception("No trained model found")
-        
+        logger.warning("No trained model found, initializing untrained model")
+        predictor = SentimentPredictor(model_path=None)
+        logger.info("Untrained model initialized successfully")
+
 except Exception as e:
-    logger.error(f"Failed to load model: {str(e)}")
+    logger.error(f"Failed to initialize model: {str(e)}")
     predictor = None
 
 @app.get("/")
@@ -135,26 +147,25 @@ def model_info():
         "model_name": predictor.model.distilbert.config.name_or_path  
     }
 
-# get a users session ids and return the latest
-@app.get("/users/{user_id}/sessions")
-def get_user_sessions_by_id(user_id: UUID):
-    try:
-        sessions = get_user_sessions(user_id)
-        return {"sessions": sessions}
-    except Exception as e:
-        logger.error(f"Failed to get user sessions: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to retrieve user sessions")
-
-
 @app.get("/sessions/{session_id}/predictions")
 def get_session_predictions_endpoint(session_id: UUID):
     """Get all predictions for a session"""
     try:
         predictions = get_session_predictions(session_id)
-        return {"predictions": predictions, "session_id": session_id}
+        return {"predictions": [pred.model_dump() for pred in predictions], "session_id": session_id}
     except Exception as e:
         logger.error(f"Failed to get predictions: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to retrieve predictions")
+
+@app.get("/users/{user_id}/predictions")
+def get_user_predictions_endpoint(user_id: UUID):
+    """Get all predictions for a user across all their sessions"""
+    try:
+        predictions = get_user_predictions(user_id)
+        return {"predictions": [pred.model_dump() for pred in predictions]}
+    except Exception as e:
+        logger.error(f"Failed to get user predictions: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve user predictions")
 
 @app.post("/register", response_model=UserResponse)
 def register_user(user_data: UserCreate):

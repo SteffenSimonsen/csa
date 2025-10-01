@@ -12,6 +12,9 @@ services:
       - TRANSFORMERS_CACHE=/tmp/cache
       - HF_HOME=/tmp/cache
       - MPLCONFIGDIR=/tmp/cache
+      # CORS: Default allows all (*). In production, set specific origins:
+      # - ALLOWED_ORIGINS=https://yourdomain.com,https://app.yourdomain.com
+      - ALLOWED_ORIGINS=*
     volumes:
       # Mount checkpoints so we can update models without rebuilding
       - ./checkpoints:/app/checkpoints:ro

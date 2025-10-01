@@ -1,6 +1,5 @@
 import streamlit as st
 import requests
-import json
 import os
 import plotly.express as px
 import pandas as pd
@@ -147,7 +146,7 @@ with st.sidebar:
                     json={"session_id": str(st.session_state.current_session_id)},
                     timeout=5
                 )
-            except:
+            except Exception:
                 pass  # Logout fails gracefully
 
             st.session_state.user = None
@@ -221,11 +220,11 @@ with tab1:
                     # Main result card
                     with st.container(border=True):
                         if label == 'positive':
-                            st.success(f"✅ POSITIVE")
+                            st.success("✅ POSITIVE")
                         elif label == 'negative':
-                            st.error(f"❌ NEGATIVE")
+                            st.error("❌ NEGATIVE")
                         else:
-                            st.warning(f"⚠️ NEUTRAL")
+                            st.warning("⚠️ NEUTRAL")
                         
                         st.markdown("**Confidence:**")
                         st.progress(confidence, text=f"{confidence:.1%}")
@@ -290,45 +289,45 @@ with tab1:
 with tab2:
     st.header("📋 Analysis History")
 
-    # Load current session_id into session state if logged in
-    if 'current_session_id' not in st.session_state:
+    # Show history based on user status
+    if st.session_state.user:
+        # Logged-in users: fetch all predictions across all sessions
         try:
-            response = requests.get(
-                f"{API_URL}/users/{st.session_state.user['user_id']}/sessions",
+            history_response = requests.get(
+                f"{API_URL}/users/{st.session_state.user['user_id']}/predictions",
                 timeout=5
             )
-            if response.status_code == 200:
-                data = response.json()
-                sessions = data.get('sessions', [])
-                if sessions:
-                    # Use the latest session
-                    st.session_state['current_session_id'] = sessions[0]['session_id']
         except Exception as e:
-            st.error(f"Error loading user sessions: {e}")
- 
-    
-    if 'current_session_id' in st.session_state:
+            st.error(f"Error loading user history: {e}")
+            history_response = None
+    elif 'current_session_id' in st.session_state:
+        # Anonymous users: fetch predictions from current session only
         try:
-            
-
-            # Fetch history from database 
             history_response = requests.get(
                 f"{API_URL}/sessions/{st.session_state['current_session_id']}/predictions",
                 timeout=5
             )
-            
+        except Exception as e:
+            st.error(f"Error loading session history: {e}")
+            history_response = None
+    else:
+        history_response = None
+
+    # Display history if available
+    if history_response:
+        try:
             if history_response.status_code == 200:
                 data = history_response.json()
                 predictions = data['predictions']
-                
+
                 if predictions:
                     # Convert database format to match  existing display logic
                     sentiments = [pred['predicted_sentiment'] for pred in predictions]
                     positive_count = sentiments.count('positive')
                     negative_count = sentiments.count('negative')
                     neutral_count = sentiments.count('neutral')
-                    
-                    # Summary stats 
+
+                    # Summary stats
                     col1, col2, col3, col4 = st.columns(4)
                     with col1:
                         st.metric("Total Reviews", len(predictions))
@@ -338,16 +337,15 @@ with tab2:
                         st.metric("Neutral", neutral_count)
                     with col4:
                         st.metric("Negative", negative_count)
-                    
-                    st.write(f"Session: {data['session_id']}")
+
                     st.divider()
-                    
+
                     # Display predictions
                     for i, pred in enumerate(predictions):
                         label = pred['predicted_sentiment']
                         confidence = pred['confidence_score']
                         text = pred['text']
-                        
+
                         # Create colored card
                         if label == 'positive':
                             with st.container(border=True):
@@ -358,7 +356,7 @@ with tab2:
                                 st.progress(confidence, text=f"{confidence:.1%}")
                                 st.write(f"Created: {pred['created_at']}")
                                 st.write("")
-                        
+
                         elif label == 'negative':
                             with st.container(border=True):
                                 st.error(f"❌ NEGATIVE - Review #{i+1}")
@@ -368,7 +366,7 @@ with tab2:
                                 st.progress(confidence, text=f"{confidence:.1%}")
                                 st.write(f"Created: {pred['created_at']}")
                                 st.write("")
-                        
+
                         else:  # neutral
                             with st.container(border=True):
                                 st.warning(f"⚠️ NEUTRAL - Review #{i+1}")
@@ -389,11 +387,36 @@ with tab2:
 
 with tab3:
     st.header("📊 Analytics Dashboard")
-    
-    if st.session_state.history:
+
+    # Fetch predictions based on user status (same logic as history tab)
+    predictions = []
+    if st.session_state.user:
+        # Logged-in users: fetch all predictions across all sessions
+        try:
+            response = requests.get(
+                f"{API_URL}/users/{st.session_state.user['user_id']}/predictions",
+                timeout=5
+            )
+            if response.status_code == 200:
+                predictions = response.json()['predictions']
+        except Exception as e:
+            st.error(f"Error loading analytics data: {e}")
+    elif 'current_session_id' in st.session_state:
+        # Anonymous users: fetch predictions from current session only
+        try:
+            response = requests.get(
+                f"{API_URL}/sessions/{st.session_state['current_session_id']}/predictions",
+                timeout=5
+            )
+            if response.status_code == 200:
+                predictions = response.json()['predictions']
+        except Exception as e:
+            st.error(f"Error loading analytics data: {e}")
+
+    if predictions:
         # Get sentiment data
-        sentiments = [item['result']['prediction']['label'] for item in st.session_state.history]
-        
+        sentiments = [pred['predicted_sentiment'] for pred in predictions]
+
         # Sentiment counts
         positive_count = sentiments.count('positive')
         negative_count = sentiments.count('negative')
@@ -409,8 +432,6 @@ with tab3:
         st.subheader("Sentiment Distribution")
 
         if total > 0:
-            import plotly.express as px
-            
             # Create pie chart data
             labels = []
             values = []
@@ -440,7 +461,7 @@ with tab3:
 
         if total > 0:
             # Get confidence scores
-            confidences = [item['result']['prediction']['confidence'] for item in st.session_state.history]
+            confidences = [pred['confidence_score'] for pred in predictions]
         
         
             confidence_df = pd.DataFrame({
